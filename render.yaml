@@ -1,0 +1,50 @@
+services:
+  # Frontend Service
+  - type: web
+    name: contact-scraper-frontend
+    runtime: docker
+    dockerfilePath: ./job-scraper/discovery_service/contact_scraper/frontend/Dockerfile
+    dockerContext: ./job-scraper/discovery_service/contact_scraper/frontend
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: contact-scraper-api
+          type: web
+          property: url
+    autoDeploy: true
+
+  # API Service
+  - type: web
+    name: contact-scraper-api
+    runtime: docker
+    dockerfilePath: ./job-scraper/discovery_service/contact_scraper/api-services/Dockerfile
+    dockerContext: ./job-scraper/discovery_service/contact_scraper/api-services
+    envVars:
+      - key: PORT
+        value: 8006
+    disk:
+      name: api-data
+      mountPath: /app/uploads
+      sizeGB: 1
+    autoDeploy: true
+
+  # Contact Discovery Service (Worker)
+  - type: worker
+    name: contact-discovery-service
+    runtime: docker
+    dockerfilePath: ./job-scraper/discovery_service/contact_scraper/Dockerfile
+    dockerContext: ./job-scraper/discovery_service/contact_scraper
+    envVars:
+      - key: PYTHONIOENCODING
+        value: UTF-8
+      - key: LANG
+        value: C.UTF-8
+      - key: SCRAPY_SETTINGS_MODULE
+        value: contact_scraper.settings
+      - key: PYTHONPATH
+        value: /app
+    disk:
+      name: scraper-data
+      mountPath: /app/output
+      sizeGB: 1
+    autoDeploy: true
