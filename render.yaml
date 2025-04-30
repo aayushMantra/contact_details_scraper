@@ -10,7 +10,7 @@ services:
         fromService:
           name: contact-scraper-api
           type: web
-          property: url
+          property: hostport
     autoDeploy: true
 
   # API Service
