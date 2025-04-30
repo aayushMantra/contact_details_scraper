@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn==0.30.6
+pika==1.3.2
+sqlalchemy
+psycopg2-binary==2.9.9  # For PostgreSQL
+elasticsearch==7.17.9   # For Elasticsearch
+prometheus-client==0.21.1
+beautifulsoup4==4.12.2  # For HTML tag removal
+dateparser==1.1.8      # For date standardization
+sqlalchemy==2.0.29  # Latest stable version as of April 2025

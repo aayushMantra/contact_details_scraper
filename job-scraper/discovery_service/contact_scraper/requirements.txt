@@ -1,0 +1,7 @@
+scrapy==2.11.1
+requests>=2.32.3
+beautifulsoup4>=4.12.2
+six>=1.16.0
+pandas>=2.0.0
+scrapy-playwright==0.0.34
+playwright==1.43.0

@@ -1,0 +1,25 @@
+# Use the official Splash image as the base
+FROM scrapinghub/splash:3.5
+
+# Avoid interactive prompts during installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Switch to root user to perform system updates and installations
+USER root
+
+# Update OpenSSL and CA certificates
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    ca-certificates \
+    curl \
+    && apt-get upgrade -y \
+    && update-ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Expose Splash port
+EXPOSE 8050
+
+# Run Splash with valid options
+CMD ["splash", "--max-timeout", "90"]

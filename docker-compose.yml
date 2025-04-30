@@ -1,0 +1,418 @@
+services:
+  # Discovery Service for job_scraper
+  discovery:
+    build:
+      context: ./job-scraper/discovery_service
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_QUEUE=urls_to_classify
+      - PYTHONIOENCODING=UTF-8
+      - LANG=C.UTF-8
+      - SPLASH_URL=http://splash:8050
+    ports:
+      - "8001:8000"
+    depends_on:
+      # splash:
+      #   condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - job-scraper-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+    shm_size: "2gb"
+    command:
+      [
+        "sh",
+        "-c",
+        "python3 /usr/local/bin/update_path.py && cd /app/job_scraper && scrapy crawl job_spider",
+      ]
+
+  # Discovery Service for contact_scraper
+  contact_discovery:
+    build:
+      context: ./job-scraper/discovery_service/contact_scraper
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_QUEUE=contact_data
+      - PYTHONIOENCODING=UTF-8
+      - LANG=C.UTF-8
+      - SCRAPY_SETTINGS_MODULE=contact_scraper.settings
+      - PYTHONPATH=/app
+    ports:
+      - "8006:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - job-scraper-network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+    shm_size: "2gb"
+    volumes:
+      - ./job-scraper/discovery_service/contact_scraper/output:/app/output
+    command:
+      [
+        "sh",
+        "-c",
+        "python3 /usr/local/bin/update_path.py && scrapy crawl contact_spider",
+      ]
+
+  api_service:
+    build:
+      context: ./job-scraper/discovery_service/contact_scraper/api-services
+      dockerfile: Dockerfile
+    ports:
+      - "8007:8006"
+    volumes:
+       - ./job-scraper/discovery_service/contact_scraper/api-services/uploads:/app/uploads
+       - ./job-scraper/discovery_service/contact_scraper/api-services/results:/app/results
+       - ./job-scraper/discovery_service/contact_scraper/output:/app/scraper_outputscraper_output
+    depends_on:
+      - contact_discovery
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+    # Frontend Service
+  frontend:
+    build:
+      context: ./job-scraper/discovery_service/contact_scraper/frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:8007
+    ports:
+      - "3000:80"
+    depends_on:
+      - api_service
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Splash Service
+  # splash:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.splash
+  #   ports:
+  #     - "8050:8050"
+  #   # volumes:
+  #   #   - ./splash-custom.conf:/etc/splash/splash.conf
+  #   environment:
+  #     - SPLASH_MAX_SLOTS=10
+  #     - SPLASH_MAX_TIMEOUT=180
+  #   networks:
+  #     - job-scraper-network
+  #   restart: always
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8050"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   logging:
+  #     driver: "json-file"
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "2.0"
+  #         memory: 2G
+  #   shm_size: "2gb"
+  #   ulimits:
+  #     nofile:
+  #       soft: 1048576
+  #       hard: 1048576
+  #   # command: --max-timeout 90
+
+  # Classification Service (placeholder)
+  classification:
+    build:
+      context: ./job-scraper/classification_service
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    ports:
+      - "8002:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Extraction Service (placeholder)
+  extraction:
+    build:
+      context: ./job-scraper/extraction_service
+      dockerfile: Dockerfile
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+    ports:
+      - "8003:8003"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Storage Service (placeholder)
+  storage:
+    build:
+      context: ./job-scraper/storage_service
+      dockerfile: Dockerfile
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=job_scraper_db
+      - POSTGRES_USER=aayush
+      - POSTGRES_PASSWORD=A@yush191102
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+    ports:
+      - "8004:8004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Search Service (placeholder)
+  search:
+    build:
+      context: ./job-scraper/search_service
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOST=http://elasticsearch:9200
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3-management
+    user: "rabbitmq"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # PostgreSQL
+  postgres:
+    image: postgres:13
+    container_name: job_scraper_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aayush}
+      POSTGRES_PASSWORD: "A@yush191102"
+      POSTGRES_DB: ${POSTGRES_DB:-job_scraper_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aayush -d job_scraper_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.9
+    container_name: webscrapper-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+      - cluster.name=docker-cluster
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -s http://localhost:9200/_cluster/health | grep -q ''"status":"green"''',
+        ]
+      interval: 60s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
+    networks:
+      - job-scraper-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+
+  # frontend:
+  #   build:
+  #     context: ./job-scraper/frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - search
+  #   networks:
+  #     - job-scraper-network
+  #   environment:
+  #     - VITE_API_URL=http://host.docker.internal:8005
+
+networks:
+  job-scraper-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
