@@ -33,10 +33,15 @@ os.makedirs("results", exist_ok=True)
 # Store job status in memory (in production, use a database)
 jobs: Dict[str, Dict] = {}
 
+
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
-    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Only CSV and Excel files are supported")
+async def upload_file(
+    file: UploadFile = File(...), background_tasks: BackgroundTasks = None
+):
+    if not file.filename.endswith((".csv", ".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=400, detail="Only CSV and Excel files are supported"
+        )
 
     job_id = str(uuid.uuid4())
     file_path = f"uploads/{job_id}_{file.filename}"
@@ -47,18 +52,19 @@ async def upload_file(file: UploadFile = File(...), background_tasks: Background
         "status": "processing",
         "progress": 0,
         "input_file": file_path,
-        "output_file": f"results/{job_id}_processed.csv"
+        "output_file": f"results/{job_id}_processed.csv",
     }
 
     background_tasks.add_task(process_file, job_id, file_path)
     return {"jobId": job_id, "status": "processing"}
+
 
 async def process_file(job_id: str, file_path: str):
     try:
         jobs[job_id]["status"] = "processing"
         jobs[job_id]["progress"] = 10
 
-        if file_path.endswith('.csv'):
+        if file_path.endswith(".csv"):
             df = pd.read_csv(file_path)
         else:
             df = pd.read_excel(file_path)
@@ -86,14 +92,17 @@ async def process_file(job_id: str, file_path: str):
         jobs[job_id]["status"] = "failed"
         jobs[job_id]["error"] = str(e)
 
+
 async def run_scraper(input_csv: str, output_csv: str, job_id: str):
     try:
         df = pd.read_csv(input_csv)
-        urls = df['url'].tolist()
-        result_df = pd.DataFrame({
-            'url': urls,
-            'emails': [''] * len(urls),
-        })
+        urls = df["url"].tolist()
+        result_df = pd.DataFrame(
+            {
+                "url": urls,
+                "emails": [""] * len(urls),
+            }
+        )
 
         total_urls = len(urls)
         for i, url in enumerate(urls):
@@ -102,11 +111,17 @@ async def run_scraper(input_csv: str, output_csv: str, job_id: str):
             await asyncio.sleep(0.5)
 
             if i % 3 == 0:
-                result_df.at[i, 'emails'] = f"contact@{url.replace('https://', '').replace('http://', '').split('/')[0]}"
+                result_df.at[i, "emails"] = (
+                    f"contact@{url.replace('https://', '').replace('http://', '').split('/')[0]}"
+                )
             if i % 2 == 0:
-                result_df.at[i, 'linkedin'] = f"https://linkedin.com/company/{url.split('.')[0].replace('https://', '').replace('http://', '')}"
+                result_df.at[i, "linkedin"] = (
+                    f"https://linkedin.com/company/{url.split('.')[0].replace('https://', '').replace('http://', '')}"
+                )
             if i % 4 == 0:
-                result_df.at[i, 'twitter'] = f"https://twitter.com/{url.split('.')[0].replace('https://', '').replace('http://', '')}"
+                result_df.at[i, "twitter"] = (
+                    f"https://twitter.com/{url.split('.')[0].replace('https://', '').replace('http://', '')}"
+                )
 
         result_df.to_csv(output_csv, index=False)
         return True
@@ -114,6 +129,7 @@ async def run_scraper(input_csv: str, output_csv: str, job_id: str):
     except Exception as e:
         logger.error(f"Error running scraper: {str(e)}")
         raise
+
 
 @app.get("/status/{job_id}")
 async def get_status(job_id: str):
@@ -123,8 +139,9 @@ async def get_status(job_id: str):
     return {
         "status": jobs[job_id]["status"],
         "progress": jobs[job_id]["progress"],
-        "error": jobs[job_id].get("error")
+        "error": jobs[job_id].get("error"),
     }
+
 
 @app.get("/download/{job_id}")
 async def download_file(job_id: str):
@@ -141,8 +158,9 @@ async def download_file(job_id: str):
     return FileResponse(
         path=output_file,
         filename=f"processed_contacts_{job_id}.csv",
-        media_type="text/csv"
+        media_type="text/csv",
     )
+
 
 @app.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
@@ -164,9 +182,11 @@ async def delete_job(job_id: str):
     del jobs[job_id]
     return {"message": "Job deleted successfully"}
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
 
 async def run_actual_scraper(input_csv: str, output_csv: str, job_id: str):
     try:
@@ -177,16 +197,20 @@ async def run_actual_scraper(input_csv: str, output_csv: str, job_id: str):
         jobs[job_id]["progress"] = 30
 
         cmd = [
-            "docker", "exec", "contact_discovery",
-            "python", "-m", "contact_scraper.run",
-            "--input", f"/app/output/input.csv",
-            "--output", f"/app/output/output.csv"
+            "docker",
+            "exec",
+            "contact_discovery",
+            "python",
+            "-m",
+            "contact_scraper.run",
+            "--input",
+            f"/app/output/input.csv",
+            "--output",
+            f"/app/output/output.csv",
         ]
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
         while True:
@@ -218,6 +242,11 @@ async def run_actual_scraper(input_csv: str, output_csv: str, job_id: str):
         logger.error(f"Error running actual scraper: {str(e)}")
         raise
 
+@app.get("/")
+async def root():
+    return {"message": "Contact Scraper API is running", "status": "ok"}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8006)
+    port = int(os.environ.get("PORT", 8006))
+    uvicorn.run(app, host="0.0.0.0", port=port)
